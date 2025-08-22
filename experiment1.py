@@ -189,3 +189,53 @@ resp = model.generate_content(
     ),
 )
 
+ISSUE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "theme": {
+            "type": "string",
+            "enum": [
+                "Data Quality",
+                "Lineage/Provenance",
+                "Timeliness/Latency",
+                "Completeness/Missing Data",
+                "Conformity/Standards",
+                "Duplication",
+                "Access/Permissioning",
+                "Reference Data/Mapping",
+                "Calculation/Derivation",
+                "Controls/Breaks/Reconciliation",
+                "Other/Unclear",
+            ],
+        },
+        "issue_summary": {"type": "string"},
+        # Optional string fields — allow nulls with `nullable: true`
+        "data_type": {"type": "string", "nullable": True},
+        "source_system": {"type": "string", "nullable": True},
+        # Optional array of strings — allow null array as well
+        "data_attribute": {
+            "type": "array",
+            "items": {"type": "string"},
+            "nullable": True,
+        },
+    },
+    "required": ["theme", "issue_summary"],
+    "additionalProperties": False,
+}
+
+def extract_issue_fields(text: str) -> IssueExtraction:
+    prompt = _build_prompt(text)
+
+    resp = model.generate_content(
+        contents=prompt,
+        generation_config=GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=ISSUE_SCHEMA_DICT,  # << pass dict (not a class)
+            temperature=0.0,                    # deterministic
+        ),
+    )
+
+    # Parse/validate Gemini's JSON with Pydantic (raises if invalid)
+    return IssueExtraction.model_validate_json(resp.text)
+
+
