@@ -239,3 +239,146 @@ def extract_issue_fields(text: str) -> IssueExtraction:
     return IssueExtraction.model_validate_json(resp.text)
 
 
+-------
+
+import json
+
+FEW_SHOTS = [
+    {
+        "issue": (
+            "DCRM: Traders report T+1 breaks in PnL because positions from Murex "
+            "arrive after 7am EST. Missing 'close_price' for several ISINs. "
+            "Markit reference feed shows gaps."
+        ),
+        "label": {
+            "theme": "Timeliness/Latency",
+            "issue_summary": "PnL breaks due to late Murex positions and missing close_price values.",
+            "data_type": "Positions/PnL",
+            "source_system": "Murex",
+            "data_attribute": ["close_price", "isin"]
+        }
+    },
+    {
+        "issue": (
+            "Client flagged duplicate trades in Snowflake fact_trades; trade_id repeats "
+            "after intraday reload. Kafka replay suspected."
+        ),
+        "label": {
+            "theme": "Duplication",
+            "issue_summary": "Duplicate trades due to intraday reload/replay in Snowflake.",
+            "data_type": "Trades",
+            "source_system": "Snowflake",
+            "data_attribute": ["trade_id"]
+        }
+    },
+    {
+        "issue": (
+            "Corporate actions mapping missing for multiple tickers; instrument reference "
+            "record lacks FIGI; downstream risk calc fails."
+        ),
+        "label": {
+            "theme": "Reference Data/Mapping",
+            "issue_summary": "Missing corporate action mappings and FIGI cause risk calc failures.",
+            "data_type": "Reference Data / Corporate Actions",
+            "source_system": None,
+            "data_attribute": ["figi", "ticker"]
+        }
+    },
+    # (Optional) another crisp example covering a different theme:
+    {
+        "issue": (
+            "Intraday prices show currency mismatch; EUR trades stored with USD currency "
+            "in the market data snapshot leading to valuation errors."
+        ),
+        "label": {
+            "theme": "Conformity/Standards",
+            "issue_summary": "Currency code mismatch in intraday prices leads to valuation errors.",
+            "data_type": "Prices/Market Data",
+            "source_system": None,
+            "data_attribute": ["currency", "price"]
+        }
+    },
+]
+
+
+ALLOWED_THEMES = {
+    "Data Quality",
+    "Lineage/Provenance",
+    "Timeliness/Latency",
+    "Completeness/Missing Data",
+    "Conformity/Standards",
+    "Duplication",
+    "Access/Permissioning",
+    "Reference Data/Mapping",
+    "Calculation/Derivation",
+    "Controls/Breaks/Reconciliation",
+    "Other/Unclear",
+}
+
+SYSTEM_INSTRUCTIONS = (
+    "You extract fields from capital markets DCRM issue descriptions. "
+    "If a field is unknown, return null. Use the exact JSON shape from the examples. "
+    "The 'theme' must be one of the allowed enum values."
+)
+
+def _build_prompt(text: str) -> str:
+    # (Optional) guard examples at runtime
+    for i, s in enumerate(FEW_SHOTS, 1):
+        lbl = s["label"]
+        assert lbl["theme"] in ALLOWED_THEMES, f"FEW_SHOTS[{i}] theme not in enum"
+        # Ensure arrays are arrays, strings are strings, etc.
+
+    examples = []
+    for s in FEW_SHOTS:
+        examples.append(
+            "Issue:\n"
+            + s["issue"]
+            + "\nJSON:\n"
+            + json.dumps(s["label"], ensure_ascii=False)
+        )
+
+    return (
+        SYSTEM_INSTRUCTIONS
+        + "\n\nExamples:\n"
+        + "\n---\n".join(examples)
+        + "\n\nNow extract from this Issue:\n"
+        + text
+    )
+from vertexai.generative_models import GenerativeModel, GenerationConfig
+
+ISSUE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "theme": {
+            "type": "string",
+            "enum": list(ALLOWED_THEMES),
+        },
+        "issue_summary": {"type": "string"},
+        "data_type": {"type": "string", "nullable": True},
+        "source_system": {"type": "string", "nullable": True},
+        "data_attribute": {
+            "type": "array",
+            "items": {"type": "string"},
+            "nullable": True,
+        },
+    },
+    "required": ["theme", "issue_summary"],
+    "additionalProperties": False,
+}
+
+
+model = GenerativeModel(MODEL_NAME)
+
+def extract_issue_fields(text: str) -> IssueExtraction:
+    prompt = _build_prompt(text)
+    resp = model.generate_content(
+        contents=prompt,
+        generation_config=GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=ISSUE_SCHEMA,
+            temperature=0.0,
+        ),
+    )
+    return IssueExtraction.model_validate_json(resp.text)
+
+
