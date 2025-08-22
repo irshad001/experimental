@@ -159,3 +159,39 @@ if __name__ == "__main__":
     )
     result = extract_issue_fields(sample)
     print(result.model_dump())
+
+
+# pip install -U google-cloud-aiplatform
+
+from vertexai.generative_models import GenerativeModel, GenerationConfig, ResponseSchema
+
+response_schema = ResponseSchema(
+    type="object",
+    properties={
+        "theme": ResponseSchema(type="string", enum=[
+            "Data Quality","Lineage/Provenance","Timeliness/Latency",
+            "Completeness/Missing Data","Conformity/Standards","Duplication",
+            "Access/Permissioning","Reference Data/Mapping","Calculation/Derivation",
+            "Controls/Breaks/Reconciliation","Other/Unclear",
+        ]),
+        "issue_summary": ResponseSchema(type="string"),
+        "data_type": ResponseSchema(type="string", nullable=True),
+        "source_system": ResponseSchema(type="string", nullable=True),
+        "data_attribute": ResponseSchema(
+            type="array",
+            items=ResponseSchema(type="string"),
+            nullable=True
+        ),
+    },
+    required=["theme","issue_summary"],
+)
+
+resp = model.generate_content(
+    contents=prompt,
+    generation_config=GenerationConfig(
+        response_mime_type="application/json",
+        response_schema=response_schema,
+        temperature=0.0,
+    ),
+)
+
