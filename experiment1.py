@@ -32,18 +32,12 @@ ThemeEnum = Literal[
 class IssueExtraction(BaseModel):
     theme: ThemeEnum = Field(description="High-level theme of the issue.")
     issue_summary: str = Field(description="One-sentence summary of the issue in plain English.")
-    data_type: Optional[str] = Field(
-        default=None,
-        description="Business data category, e.g., Trades, Orders, Positions, Prices, Reference Data, Corporate Actions, Client, Instrument, Risk, PnL.",
-    )
-    source_system: Optional[str] = Field(
-        default=None,
-        description="Primary upstream/source system named or implied in the description (e.g., Murex, Calypso, Aladdin, Markit EDM, Snowflake, Kafka topic).",
-    )
-    data_attribute: Optional[List[str]] = Field(
-        default=None,
-        description="Specific attributes/columns/fields affected (e.g., trade_id, execution_time, price, quantity, currency, isin, counterparty).",
-    )
+    data_type: Optional[str] = Field(default=None)
+    source_system: Optional[str] = Field(default=None)
+    data_attribute: Optional[List[str]] = Field(default=None)
+
+# Convert Pydantic -> JSON Schema dict (works on vertexai 1.71.1)
+ISSUE_SCHEMA_DICT = IssueExtraction.model_json_schema()
 
 # ---------- 2) Model ----------
 # Pick an available Vertex model name in your region.
